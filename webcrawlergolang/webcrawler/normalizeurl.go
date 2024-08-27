@@ -49,12 +49,12 @@ func GetURLsFromHTML(htmlBody, rawBaseURL string) ([]string, error) {
                     // the href is here.
                     // have to check, if the href has a baseurl. if it does, then just append it to result, if it doesnt,
                     // add it to the baseeurl and then append it to result.
-                    fmt.Println(n.Val)
-                    if n.Val[0:4] == "http" {
+                    if len(n.Val) >= 4 && n.Val[0:4] == "http" {
                         result = append(result, n.Val)
                     } else {
                         result = append(result, rawBaseURL + n.Val)
                     }
+
                         
                 }
             }
@@ -99,9 +99,59 @@ func FetchHTML(rawURL string) (string, error) {
 
 
 func CrawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) {
+	// crawl as long as the urls got the same domain. otherwise itll jump domains, which can potentially
+    // lead to a whole lot of crawling
+    currentURL, err := url.Parse(rawCurrentURL)
+	if err != nil {
+		fmt.Printf("Error - crawlPage: couldn't parse URL '%s': %v\n", rawCurrentURL, err)
+		return
+	}
+	baseURL, err := url.Parse(rawBaseURL)
+	if err != nil {
+		fmt.Printf("Error - crawlPage: couldn't parse URL '%s': %v\n", rawBaseURL, err)
+		return
+	}
+
+	// skip other websites
+	if currentURL.Hostname() != baseURL.Hostname() {
+		return
+	}
     
-}
- 
+    // get the normalized url to make it more readable and save in the map with a value showing how often said url appeared as an href
+	normalizedURL, err := NormalizeURL(rawCurrentURL)
+	if err != nil {
+		fmt.Printf("Error - normalizedURL: %v", err)
+	}
+
+	// if already in map increase counter
+	if _, visited := pages[normalizedURL]; visited {
+		pages[normalizedURL]++
+		return
+	}
+
+	// if not in map, then make a new index, and init counter with 1 
+	pages[normalizedURL] = 1
+
+	fmt.Printf("crawling %s\n", rawCurrentURL)
+
+    // get the html
+	htmlBody, err := FetchHTML(rawCurrentURL)
+	if err != nil {
+		fmt.Printf("Error - getHTML: %v", err)
+		return
+	}
+
+    // get the hrefs from a tags out of the html body and save them in a slice
+	nextURLs, err := GetURLsFromHTML(htmlBody, rawBaseURL)
+	if err != nil {
+		fmt.Printf("Error - getURLsFromHTML: %v", err)
+	}
+
+    // iterate the slice and call the crawler again.
+	for _, nextURL := range nextURLs {
+		CrawlPage(rawBaseURL, nextURL, pages)
+	}
+} 
 
 
 
